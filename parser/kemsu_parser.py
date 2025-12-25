@@ -1,40 +1,71 @@
-# Import modules for HTTP requests and HTML parsing
 import requests
 from bs4 import BeautifulSoup
+from typing import List, Dict
 
-# Import configuration constants
 from config.settings import KEMSU_URL, REQUEST_TIMEOUT
 
-# Search for news on the Kemerovo State University website based on a query string
-def search_news(query: str) -> list[str]:
-    # Return empty list if query is empty
+# Fetches news items from the KEMSU website. Returns a list of dictionaries with title, date and url
+def fetch_news() -> List[Dict[str, str]]:
+    
+    try:
+        response = requests.get(KEMSU_URL, timeout=REQUEST_TIMEOUT)
+        response.raise_for_status()
+    except requests.RequestException:
+        return []
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    news_list: List[Dict[str, str]] = []
+
+    # Find all news cards
+    news_items = soup.find_all("div", class_="news-item")
+
+    for item in news_items:
+        # Title and link
+        title_block = item.find("div", class_="title")
+        if not title_block:
+            continue
+
+        link_tag = title_block.find("a")
+        if not link_tag:
+            continue
+
+        title = link_tag.text.strip()
+        url = link_tag.get("href")
+
+        if not title or not url:
+            continue
+
+        # Date
+        date_block = item.find("div", class_="date")
+        date = date_block.text.strip() if date_block else ""
+
+        news_list.append({
+            "title": title,
+            "date": date,
+            "url": url
+        })
+
+    return news_list
+
+# Filters news by query in title (case-insensitive)
+def search_news(query: str) -> List[Dict[str, str]]:
+
     if not query:
         return []
 
-    try:
-        # Send a GET request to the university website with a timeout
-        response = requests.get(KEMSU_URL, timeout=REQUEST_TIMEOUT)
-        # Raise an exception for HTTP errors
-        response.raise_for_status()
-    except requests.RequestException:
-        # Return empty list if request fails
-        return []
+    query = query.lower()
+    all_news = fetch_news()
 
-    # Parse the HTML response
-    soup = BeautifulSoup(response.text, "html.parser")
-
-    # Find all <a> tags containing the query text (case-insensitive)
-    items = soup.find_all(
-        "a",
-        string=lambda text: text and query.lower() in text.lower()
-    )
-
-    # Return a list of cleaned text from the found elements
-    return [item.text.strip() for item in items]
+    return [
+        news for news in all_news
+        if query in news["title"].lower()
+    ]
 
 
 if __name__ == "__main__":
-    # Simple module test without Telegram
-    results = search_news("расписание")
-    for r in results:
-        print(r)
+    results = search_news("ярмарка")
+    for n in results:
+        print(n["date"])
+        print(n["title"])
+        print(n["url"])
+        print()

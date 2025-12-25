@@ -14,8 +14,8 @@ from aiogram.types import BufferedInputFile
 # HTTP client for downloading PDF files from external sources
 import requests
 
-# Service for searching news on the university website
-from services.search import get_news_for_user
+# Service for getting latest news (without search)
+from services.search import get_latest_news
 
 # Service functions for working with schedules
 from services.schedule import (
@@ -30,7 +30,6 @@ from bot.keyboards import (
     categories_keyboard,
     groups_keyboard,
 )
-
 
 # Create a router instance for this module
 router = Router()
@@ -48,11 +47,44 @@ class ScheduleStates(StatesGroup):
 # Handler for the /start command
 @router.message(F.text == "/start")
 async def start_handler(message: Message):
-    # Send greeting message and show the main menu
     await message.answer(
         "Привет! Я помощник Института цифры КемГУ.",
         reply_markup=main_menu_keyboard()
     )
+
+
+# Handler for the /help command
+@router.message(F.text == "/help")
+async def help_handler(message: Message):
+    await message.answer(
+        """
+        Давай посмотрим, что я умею:\n\n
+        1. Новости - Посмотрим актуальные события Института\n
+        2. Расписание - Быстро найдём твоё расписание\n
+        3. /help - Руководство по использованию бота (ты тут)\n
+        4. /start - Начать общение сначала
+        """,
+        reply_markup=main_menu_keyboard()
+    )
+
+
+# Handler for the "Новости" button
+@router.message(F.text == "Новости")
+async def news_handler(message: Message, state: FSMContext):
+    # Clear any previous FSM state
+    await state.clear()
+
+    news = get_latest_news(limit=5)
+
+    if not news:
+        await message.answer("Новости не найдены.")
+        return
+
+    response = "Последние новости:\n"
+    for item in news:
+        response += item
+
+    await message.answer(response)
 
 
 # Entry point for schedule selection
@@ -151,24 +183,10 @@ async def group_chosen(message: Message, state: FSMContext):
     )
 
 
-# Default text handler for news search
+# Default handler for any other text
 @router.message(F.text)
-async def text_handler(message: Message):
-    # Clean user input
-    query = message.text.strip()
-
-    # Search for news based on user query
-    news = get_news_for_user(query)
-
-    # Inform user if no results were found
-    if not news:
-        await message.answer("По вашему запросу ничего не найдено.")
-        return
-
-    # Build response message with found news
-    response = "Найденные новости:\n\n"
-    for item in news:
-        response += f"• {item}\n"
-
-    # Send news list to the user
-    await message.answer(response)
+async def unknown_text_handler(message: Message):
+    await message.answer(
+        "Пожалуйста, выберите действие в меню.",
+        reply_markup=main_menu_keyboard()
+    )

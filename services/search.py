@@ -1,10 +1,14 @@
-# Import the search_news function from the parser module
-from parser.kemsu_parser import search_news
+from parser.kemsu_parser import fetch_news
 
-# Retrieve news for the user and limit the number of results
-def get_news_for_user(query: str, limit: int = 5) -> list[str]:
-    # Perform a news search using the parser
-    results = search_news(query)
+# Returns formatted latest news without search
+def get_latest_news(limit: int = 5) -> list[str]:
 
-    # Return only up to 'limit' number of results
-    return results[:limit]
+    news = fetch_news()
+
+    formatted = []
+    for item in news[:limit]:
+        formatted.append(
+            f'\n\n{item["date"]}\n{item["title"]}'
+        )
+
+    return formatted

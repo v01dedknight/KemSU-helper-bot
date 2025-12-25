@@ -1,4 +1,4 @@
-# Telegram-bot-parser
+# KemSU-helper-bot
 
 ## Description
 This bot allows students to quickly search for relevant information on the university website. It is designed as a convenient tool to access news and other useful data.

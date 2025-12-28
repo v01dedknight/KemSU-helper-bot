@@ -28,6 +28,11 @@ from bot.keyboards import (
     groups_keyboard,
 )
 
+# Logging
+import logging
+
+logger = logging.getLogger(__name__)
+
 # Create a router instance for this module
 router = Router()
 
@@ -44,8 +49,9 @@ class ScheduleStates(StatesGroup):
 # Handler for the /start command
 @router.message(F.text == "/start")
 async def start_handler(message: Message):
+    logger.info(f"User {message.from_user.id} started bot")
     await message.answer(
-        "Привет! Я помощник Института цифры КемГУ.",
+        "⛄ Привет! Я помощник института Цифры КемГУ.",
         reply_markup=main_menu_keyboard()
     )
 
@@ -53,9 +59,10 @@ async def start_handler(message: Message):
 # Handler for the /help command
 @router.message(F.text == "/help")
 async def help_handler(message: Message):
+    logger.info(f"User {message.from_user.id} requested help")
     await message.answer(
         """
-        Давай посмотрим, что я умею:\n\n
+        ⛄ Давай посмотрим, что я умею:\n
         1. Новости - Посмотрим актуальные события Института\n
         2. Расписание - Быстро найдём твоё расписание\n
         3. /help - Руководство по использованию бота (ты тут)\n
@@ -66,18 +73,22 @@ async def help_handler(message: Message):
 
 
 # Handler for the "Новости" button
-@router.message(F.text == "Новости")
+@router.message(F.text == "📺 Новости")
 async def news_handler(message: Message, state: FSMContext):
+    logger.info(f"User {message.from_user.id} requested latest news")
     # Clear any previous FSM state
     await state.clear()
 
     news = await get_latest_news(limit=5)
 
     if not news:
-        await message.answer("Новости не найдены.")
+        await message.answer("🦌 Новости не найдены")
+        logger.exception(
+            f"News not found. News: {news}"
+        )
         return
 
-    response = "Последние новости:\n"
+    response = "⛄ Последние новости:\n"
     for item in news:
         response += item
 
@@ -85,8 +96,9 @@ async def news_handler(message: Message, state: FSMContext):
 
 
 # Entry point for schedule selection
-@router.message(F.text == "Расписание")
+@router.message(F.text == "📄 Расписание")
 async def schedule_start(message: Message, state: FSMContext):
+    logger.info(f"User {message.from_user.id} started schedule flow")
     # Reset any previous state
     await state.clear()
     
@@ -98,7 +110,7 @@ async def schedule_start(message: Message, state: FSMContext):
     
     # Ask user to choose a schedule category
     await message.answer(
-        "Выберите категорию расписания:",
+        "⛄ Выберите категорию расписания:",
         reply_markup=categories_keyboard(categories)
     )
 
@@ -107,13 +119,17 @@ async def schedule_start(message: Message, state: FSMContext):
 @router.message(ScheduleStates.choosing_category)
 async def category_chosen(message: Message, state: FSMContext):
     category = message.text
+    logger.info(f"User {message.from_user.id} chose category: {category}")
     
     # Get list of groups for the selected category
     groups = get_groups(category)
 
     # Validate category
     if not groups:
-        await message.answer("Некорректная категория.")
+        await message.answer("🦌 Некорректная категория")
+        logger.exception(
+            f"Wrong category. Category: {category} . Groups: {groups}"
+        )
         return
 
     # Save selected category to FSM context
@@ -124,20 +140,22 @@ async def category_chosen(message: Message, state: FSMContext):
 
     # Ask user to choose a group
     await message.answer(
-        f"Категория: {category}\nВыберите группу:",
+        f"⛄\nКатегория: {category}\nВыберите группу:",
         reply_markup=groups_keyboard(groups)
     )
 
 
 # Back button
-@router.message(ScheduleStates.choosing_group, F.text == "Назад")
+@router.message(ScheduleStates.choosing_group, F.text == "⬅ Назад")
 async def back_to_categories(message: Message, state: FSMContext):
+    logger.info(f"User {message.from_user.id} returned to categories")
+    
     categories = get_categories()
 
     await state.set_state(ScheduleStates.choosing_category)
 
     await message.answer(
-        "Выберите категорию расписания:",
+        "⛄ Выберите категорию расписания:",
         reply_markup=categories_keyboard(categories)
     )
 
@@ -145,8 +163,9 @@ async def back_to_categories(message: Message, state: FSMContext):
 # Handler for group selection
 @router.message(ScheduleStates.choosing_group)
 async def group_chosen(message: Message, state: FSMContext):
+    
     # to avoid processing this as a group
-    if message.text == "Назад":
+    if message.text == "⬅ Назад":
         return
     
     group = message.text
@@ -155,8 +174,13 @@ async def group_chosen(message: Message, state: FSMContext):
 
     pdf_path = get_schedule_path(category, group)
 
+    logger.info(f"User {message.from_user.id} chose group: {group} ({category})")
+
     if not pdf_path:
-        await message.answer("Файл расписания не найден.")
+        await message.answer("🦌 Файл расписания не найден")
+        logger.exception(
+            f"The schedule file was not found. Category: {category} . Group: {group}"
+        )
         return
 
     try:
@@ -170,12 +194,15 @@ async def group_chosen(message: Message, state: FSMContext):
             caption=f"Расписание\n{category}\n{group}"
         )
 
-    except Exception:
-        await message.answer("Не удалось отправить файл расписания.")
+    except Exception as e:
+        await message.answer("🦌 Не удалось отправить файл расписания")
+        logger.exception(
+            f"Failed to send schedule PDF. Category: {category} . Group: {group} . Exception type: {e}"
+        )
 
     await state.clear()
     await message.answer(
-        "Выберите следующий раздел:",
+        "⛄ Выберите следующий раздел:",
         reply_markup=main_menu_keyboard()
     )
 
@@ -184,6 +211,6 @@ async def group_chosen(message: Message, state: FSMContext):
 @router.message(F.text)
 async def unknown_text_handler(message: Message):
     await message.answer(
-        "Пожалуйста, выберите действие в меню.",
+        "⛄ Пожалуйста, выберите действие в меню",
         reply_markup=main_menu_keyboard()
     )

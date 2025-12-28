@@ -1,5 +1,8 @@
 from typing import Dict, List
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Base directory with local PDF schedules
 SCHEDULES_DIR = Path("assets/schedules")
@@ -90,13 +93,16 @@ SCHEDULE_DATA: Dict[str, Dict[str, Path]] = {
 # PUBLIC API 
 
 def get_categories() -> List[str]:
+    logger.debug("Fetching schedule categories")
     return list(SCHEDULE_DATA.keys())
 
 
 def get_groups(category: str) -> List[str]:
+    logger.debug(f"Fetching groups for category: {category}")
     return list(SCHEDULE_DATA.get(category, {}).keys())
 
 
 def get_schedule_path(category: str, group: str) -> Path | None:
+    logger.warning(f"Schedule not found for category={category}, group={group}")
     path = SCHEDULE_DATA.get(category, {}).get(group)
     return path if path and path.exists() else None

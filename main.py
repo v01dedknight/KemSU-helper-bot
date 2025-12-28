@@ -1,3 +1,6 @@
+# Logging initialisation
+from config import logging as _
+
 # Import asyncio for running asynchronous functions
 import asyncio
 
@@ -7,6 +10,11 @@ from aiogram import Bot, Dispatcher
 # Import configuration and router
 from config.settings import TELEGRAM_TOKEN
 from bot.handlers import router
+
+# log imp
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Main entry point for running the Telegram bot
 async def main():
@@ -20,7 +28,13 @@ async def main():
     dp.include_router(router)
 
     # Print a message indicating the bot has started
-    print("Telegram bot started")
+    logger.info("Telegram bot started")
+    
+    try:
+        await dp.start_polling(bot)
+    except Exception as e:
+        logger.exception(f"Telegram bot crashed: {e}")
+        raise
 
     # Start polling for updates
     await dp.start_polling(bot)

@@ -4,13 +4,19 @@ from typing import List, Dict
 
 from config.settings import KEMSU_URL, REQUEST_TIMEOUT
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 # Fetches news items from the KEMSU website. Returns a list of dictionaries with title, date and url
 async def fetch_news() -> List[Dict[str, str]]:
+    logger.info(f"Requesting {KEMSU_URL}")
     timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
 
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.get(KEMSU_URL) as response:
             if response.status != 200:
+                logger.warning(f"KEMSU returned non-200 status: {response.status}")
                 return []
 
             html = await response.text()
@@ -34,28 +40,6 @@ async def fetch_news() -> List[Dict[str, str]]:
             "url": link["href"],
             "date": date_block.text.strip() if date_block else ""
         })
+    logger.info(f"Parsed {len(news_list)} news items")
 
     return news_list
-
-# Filters news by query in title (case-insensitive)
-def search_news(query: str) -> List[Dict[str, str]]:
-
-    if not query:
-        return []
-
-    query = query.lower()
-    all_news = fetch_news()
-
-    return [
-        news for news in all_news
-        if query in news["title"].lower()
-    ]
-
-
-if __name__ == "__main__":
-    results = search_news("ярмарка")
-    for n in results:
-        print(n["date"])
-        print(n["title"])
-        print(n["url"])
-        print()

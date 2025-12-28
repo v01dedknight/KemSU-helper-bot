@@ -1,48 +1,38 @@
-import requests
+import aiohttp
 from bs4 import BeautifulSoup
 from typing import List, Dict
 
 from config.settings import KEMSU_URL, REQUEST_TIMEOUT
 
 # Fetches news items from the KEMSU website. Returns a list of dictionaries with title, date and url
-def fetch_news() -> List[Dict[str, str]]:
-    
-    try:
-        response = requests.get(KEMSU_URL, timeout=REQUEST_TIMEOUT)
-        response.raise_for_status()
-    except requests.RequestException:
-        return []
+async def fetch_news() -> List[Dict[str, str]]:
+    timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
 
-    soup = BeautifulSoup(response.text, "html.parser")
-    news_list: List[Dict[str, str]] = []
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.get(KEMSU_URL) as response:
+            if response.status != 200:
+                return []
 
-    # Find all news cards
-    news_items = soup.find_all("div", class_="news-item")
+            html = await response.text()
 
-    for item in news_items:
-        # Title and link
+    soup = BeautifulSoup(html, "html.parser")
+    news_list = []
+
+    for item in soup.find_all("div", class_="news-item"):
         title_block = item.find("div", class_="title")
         if not title_block:
             continue
 
-        link_tag = title_block.find("a")
-        if not link_tag:
+        link = title_block.find("a")
+        if not link:
             continue
 
-        title = link_tag.text.strip()
-        url = link_tag.get("href")
-
-        if not title or not url:
-            continue
-
-        # Date
         date_block = item.find("div", class_="date")
-        date = date_block.text.strip() if date_block else ""
 
         news_list.append({
-            "title": title,
-            "date": date,
-            "url": url
+            "title": link.text.strip(),
+            "url": link["href"],
+            "date": date_block.text.strip() if date_block else ""
         })
 
     return news_list

@@ -21,7 +21,7 @@ from services.search import get_latest_news
 from services.schedule import (
     get_categories,
     get_groups,
-    get_schedule_url,
+    get_schedule_path,
 )
 
 # Reply keyboards used in the bot interface
@@ -74,7 +74,7 @@ async def news_handler(message: Message, state: FSMContext):
     # Clear any previous FSM state
     await state.clear()
 
-    news = get_latest_news(limit=5)
+    news = await get_latest_news(limit=5)
 
     if not news:
         await message.answer("Новости не найдены.")
@@ -136,47 +136,30 @@ async def category_chosen(message: Message, state: FSMContext):
 @router.message(ScheduleStates.choosing_group)
 async def group_chosen(message: Message, state: FSMContext):
     group = message.text
-    
-    # Retrieve previously saved category from FSM context
     data = await state.get_data()
     category = data.get("category")
 
-    # Get direct URL to the schedule PDF
-    url = get_schedule_url(category, group)
+    pdf_path = get_schedule_path(category, group)
 
-    # Validate URL existence
-    if not url:
-        await message.answer("Расписание для выбранной группы не найдено.")
+    if not pdf_path:
+        await message.answer("Файл расписания не найден.")
         return
 
     try:
-        # Download the PDF file from the university website
-        response = requests.get(url, timeout=15)
-        response.raise_for_status()
-
-        # Wrap file bytes for sending to Telegram
         pdf_file = BufferedInputFile(
-            file=response.content,
-            filename="schedule.pdf"
+            file=pdf_path.read_bytes(),
+            filename=pdf_path.name
         )
 
-        # Send the PDF document to the user
         await message.answer_document(
             document=pdf_file,
             caption=f"Расписание\n{category}\n{group}"
         )
 
     except Exception:
-        # Fallback: send the direct link if file download fails
-        await message.answer(
-            "Не удалось загрузить файл напрямую.\n"
-            f"Вот ссылка на расписание:\n{url}"
-        )
+        await message.answer("Не удалось отправить файл расписания.")
 
-    # Clear FSM state after completing the flow
     await state.clear()
-    
-    # Return user to the main menu
     await message.answer(
         "Выберите следующий раздел:",
         reply_markup=main_menu_keyboard()
